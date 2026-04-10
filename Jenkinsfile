@@ -1,81 +1,100 @@
-@Library('my-shared-library') _
 pipeline {
-    agent any
-    environment {
-        DOCKERHUB_CREDENTIALS=credentials('dockerhub')
-        GITHUB_CREDENTIALS=credentials('github')
-        JFROG_CREDENTIALS=credentials('jfrog-user')
+  agent any
 
-    parameters {
-        choice(name: 'Action', choices: "create\ndelete", description: "Choose create/delete")
-        string(name: 'App_Version', defaultValue: '', description: 'Application Tag')
+  parameters {
+     string(name: "App_Version", description: "provide application version")
+  }
+
+  environment {
+    DOCKERHUB_CREDENTIALS=credentials("dockerhub")
+  }
+
+  stages {
+    stage("Checkout") {
+      steps {
+        checkout scmGit(branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/shivagande26/DataStore.git']])
+      }
     }
-    stages {
-        stage('checkout') {
-                when { expression { params.Action == 'create' } }
-            steps {
-                gitCheckout(
-                    branch: "master",
-                    url: "https://github.com/shivakumar26011999/DataStore.git"
-                )
-            }
-        }
-        stage('maven build') {
-            steps {
-                script {
-                    mavenBuild()
-                }
-            }
-        }
-        stage('maven test') {
-            steps {
-                script {
-                    mavenTest()
-                }
-            }
-        }
-        stage('static code analysis') {
-            steps {
-                script {
-                    def SonarQubecredentialsId = 'sonarqube'
-                    staticCodeAnalysis(SonarQubecredentialsId)
-                }
-            }
-        }
-        stage('uploading artifacts to jfrog') {
-            steps {
-                 script {
-                     artifactsToJfrog("$JFROG_CREDENTIALS_USR", "$JFROG_CREDENTIALS_PSW", "./target/datastore-*.jar", "http://3.110.159.198:8082/artifactory/datastore/")
-                 }
-            }
-        }
-        stage('docker image build') {
-            steps {
-                script {
-                     dockerImageBuild("datastore","${App_Version}","latest")
-                }
-            }
-        }
-        stage("docker image scan") {
-            steps {
-                script {
-                    dockerImageScan("datastore","${App_Version}","8072388539")
-                }
-            }
-        }
-        stage('docker image push') {
-            steps {
-                script {
-                    dockerImagePush("$DOCKERHUB_CREDENTIALS_USR", "$DOCKERHUB_CREDENTIALS_PSW", "datastore", "${App_Version}")
-                }
-            }
-        }
-        stage('removing unused images') {
-           steps {
-               script {
-                    cleaningDockerImages()
-               }
-           }
-        }
+    stage("Maven Build") {
+      steps {
+        sh """
+          echo "-------- Building Application --------"
+          mvn clean package
+          echo "------- Application Built Successfully --------"
+        """
+      }
     }
+    stage("Maven Test") {
+      steps {
+        sh """
+          echo "-------- Executing Testcases --------"
+          mvn test
+          echo "-------- Testcases Execution Complete --------"
+        """
+      }
+    }
+    stage("Artifact Store") {
+      steps {
+        sh """
+          echo "-------- Pushing Artifacts To S3 --------"
+          aws s3 cp ./target/*.jar s3://datastore-artefact-store-jenkins-apps/
+          echo "-------- Pushing Artifacts To S3 Completed --------"
+        """
+      }
+    }
+    stage("Docker Image Build") {
+      steps {
+        sh """
+          echo "-------- Building Docker Image --------"
+          docker build -t datastore:"${App_Version}" .
+          echo "-------- Image Successfully Built --------"
+        """
+      }
+    }
+    stage("Docker Image Scan") {
+      steps {
+        sh """
+          echo "-------- Scanning Docker Image --------"
+          trivy image datastore:"${App_Version}"
+          echo "-------- Scanning Docker Image Complete --------"
+        """
+      }
+    }
+    stage("Docker Image Tag") {
+      steps{
+        sh """
+          echo "-------- Tagging Docker Image --------"
+          docker tag datastore:"${App_Version}" 8072388539/datastore:"${App_Version}"
+          echo "-------- Tagging Docker Image Completed."
+        """
+      }
+    }
+    stage("Loggingin & Pushing Docker Image") {
+      steps {
+        sh """
+          echo "-------- Logging To DockerHub --------"
+          docker login -u $DOCKERHUB_CREDENTIALS_USR --password $DOCKERHUB_CREDENTIALS_PSW
+          echo "-------- DockerHub Login Successful --------"
+
+          echo "-------- Pushing Docker Image To DockerHub --------"
+          docker push 8072388539/datastore:"${App_Version}"
+          echo "-------- Docker Image Pushed Successfully --------"
+        """
+      }
+    }
+    stage("Cleanup") {
+      steps {
+        sh """
+           echo "-------- Cleaning Up Jenkins Machine --------"
+           docker image prune -a -f
+           echo "-------- Clean Up Successful --------"
+        """
+      }
+    }
+    stage("Deployment Acceptance") {
+      steps {
+        input 'Trigger Down Stream Job??'
+      }
+    }
+  }
 }
