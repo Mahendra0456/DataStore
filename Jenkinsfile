@@ -33,6 +33,20 @@ pipeline {
         """
       }
     }
+
+    stage("SonarQube Analysis") {
+  steps {
+    withSonarQubeEnv('sonarqube') {
+      sh """
+        mvn sonar:sonar \
+        -Dsonar.projectKey=datastore \
+        -Dsonar.projectName=datastore \
+        -Dsonar.host.url=http://35.154.3.191:9000 \
+        -Dsonar.login=$SONAR_AUTH_TOKEN
+      """
+    }
+  }
+}
     stage("Artifact Store") {
       steps {
         sh """
