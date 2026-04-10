@@ -37,7 +37,7 @@ pipeline {
       steps {
         sh """
           echo "-------- Pushing Artifacts To S3 --------"
-          aws s3 cp ./target/*.jar s3://datastore-artefact-store-jenkins-apps/
+          aws s3 cp ./target/*.jar s3://jenkins-pipeline-s3-bkt/
           echo "-------- Pushing Artifacts To S3 Completed --------"
         """
       }
