@@ -53,11 +53,11 @@ pipeline {
     }
     stage("Docker Image Scan") {
       steps {
-        sh """
-          echo "-------- Scanning Docker Image --------"
-          trivy image datastore:"${App_Version}"
-          echo "-------- Scanning Docker Image Complete --------"
-        """
+         sh """
+      echo "-------- Scanning Docker Image --------"
+      trivy image --scanners vuln --severity HIGH,CRITICAL datastore:${App_Version}
+      echo "-------- Scanning Docker Image Complete --------"
+    """
       }
     }
     stage("Docker Image Tag") {
