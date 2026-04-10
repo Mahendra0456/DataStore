@@ -12,7 +12,7 @@ pipeline {
   stages {
     stage("Checkout") {
       steps {
-        checkout scmGit(branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/shivagande26/DataStore.git']])
+        checkout scmGit(branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/Mahendra0456/DataStore.git']])
       }
     }
     stage("Maven Build") {
